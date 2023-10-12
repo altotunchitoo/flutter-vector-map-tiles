@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 import 'package:vector_tile_renderer/vector_tile_renderer.dart' hide TileLayer;
+
 // ignore: uri_does_not_exist
 import 'api_key.dart';
 
@@ -95,15 +96,18 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget _map(Style style) => FlutterMap(
         mapController: _controller,
         options: MapOptions(
-            center: style.center ?? const LatLng(49.246292, -123.116226),
-            zoom: style.zoom ?? 10,
-            maxZoom: 22,
-            interactiveFlags: InteractiveFlag.rotate |
+          initialCenter: style.center ?? const LatLng(49.246292, -123.116226),
+          initialZoom: style.zoom ?? 10,
+          maxZoom: 22,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.rotate |
                 InteractiveFlag.drag |
                 InteractiveFlag.flingAnimation |
                 InteractiveFlag.pinchMove |
                 InteractiveFlag.pinchZoom |
-                InteractiveFlag.doubleTapZoom),
+                InteractiveFlag.doubleTapZoom,
+          ),
+        ),
         children: [
           VectorTileLayer(
               tileProviders: style.providers,
@@ -121,6 +125,6 @@ class _MyHomePageState extends State<MyHomePage> {
           stream: _controller.mapEventStream,
           builder: (context, snapshot) {
             return Text(
-                'Zoom: ${_controller.zoom.toStringAsFixed(2)} Center: ${_controller.center.latitude.toStringAsFixed(4)},${_controller.center.longitude.toStringAsFixed(4)}');
+                'Zoom: ${_controller.camera.zoom.toStringAsFixed(2)} Center: ${_controller.camera.center.latitude.toStringAsFixed(4)},${_controller.camera.center.longitude.toStringAsFixed(4)}');
           }));
 }

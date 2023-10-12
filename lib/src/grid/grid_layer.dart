@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:executor_lib/executor_lib.dart';
-import 'package:flutter/material.dart' as material show Theme;
 import 'package:flutter/widgets.dart';
-import 'package:flutter_map/plugin_api.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../cache/cache_storage_function.dart';
 import 'package:vector_tile_renderer/vector_tile_renderer.dart' hide TileLayer;
@@ -30,10 +29,10 @@ import 'tile/disposable_state.dart';
 import 'tile_widgets.dart';
 
 class VectorTileCompositeLayer extends StatefulWidget {
-  final FlutterMapState mapState;
+  final MapCamera mapCamera;
   final VectorTileLayerOptions options;
 
-  const VectorTileCompositeLayer(this.options, this.mapState, {super.key});
+  const VectorTileCompositeLayer(this.options, this.mapCamera, {super.key});
 
   @override
   State<StatefulWidget> createState() {
@@ -65,6 +64,7 @@ class _VectorTileCompositeLayerState extends State<VectorTileCompositeLayer>
               types: ThemeLayerType.values
                   .where((it) => it != ThemeLayerType.symbol)
                   .toSet()));
+
   Theme get symbolTheme =>
       _symbolTheme ??
       (_symbolTheme =
@@ -104,7 +104,7 @@ class _VectorTileCompositeLayerState extends State<VectorTileCompositeLayer>
   @override
   void didUpdateWidget(covariant VectorTileCompositeLayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final newState = widget.mapState.toMapState();
+    final newState = widget.mapCamera.toMapState();
     final previousState = _previousState;
     _previousState = newState;
     if (widget.options.hasRenderDifferences(oldWidget.options)) {
@@ -139,18 +139,15 @@ class _VectorTileCompositeLayerState extends State<VectorTileCompositeLayer>
               options.tileDelay,
               options.concurrency);
       _tileProvider = tileProvider;
-      final hasBackground = theme.layers
-          .where((layer) => layer.type == ThemeLayerType.background)
-          .isNotEmpty;
-      layers.add(TileLayer(
+      layers.add(
+        TileLayer(
           key: Key("${theme.id}_v${theme.version}_VectorTileLayer"),
           maxZoom: maxZoom,
           maxNativeZoom: maxZoom.ceil(),
           evictErrorTileStrategy: EvictErrorTileStrategy.notVisible,
-          backgroundColor: hasBackground
-              ? material.Theme.of(context).canvasColor
-              : const Color.fromARGB(0, 0, 0, 0),
-          tileProvider: tileProvider));
+          tileProvider: tileProvider,
+        ),
+      );
     }
     if (options.layerMode == VectorTileLayerMode.vector) {
       layers.add(_VectorTileLayer(
@@ -168,7 +165,7 @@ class _VectorTileCompositeLayerState extends State<VectorTileCompositeLayer>
               tileZoomSubstitutionOffset: 0,
               mapZoom: _zoom,
               rotation: _rotation),
-          widget.mapState,
+          widget.mapCamera,
           _mapChanged.stream,
           _tileSupplier));
       if (backgroundTheme != null) {
@@ -185,7 +182,7 @@ class _VectorTileCompositeLayerState extends State<VectorTileCompositeLayer>
                 tileZoomSubstitutionOffset: 4,
                 mapZoom: _zoom,
                 rotation: _rotation),
-            widget.mapState,
+            widget.mapCamera,
             _mapChanged.stream,
             _tileSupplier);
         layers.insert(0, background);
@@ -225,9 +222,10 @@ class _VectorTileCompositeLayerState extends State<VectorTileCompositeLayer>
 
   double _zoom() => max(
       1,
-      (widget.mapState.zoom + widget.options.tileOffset.zoomOffset)
+      (widget.mapCamera.zoom + widget.options.tileOffset.zoomOffset)
           .floorToDouble());
-  double _rotation() => widget.mapState.rotationRad;
+
+  double _rotation() => widget.mapCamera.rotationRad;
 }
 
 class _LayerOptions {
@@ -243,6 +241,7 @@ class _LayerOptions {
   final double Function() mapZoom;
   final double Function() rotation;
   final Caches caches;
+
   _LayerOptions(this.theme,
       {this.symbolTheme,
       this.sprites,
@@ -259,7 +258,7 @@ class _LayerOptions {
 
 class _VectorTileLayer extends StatefulWidget {
   final _LayerOptions options;
-  final FlutterMapState mapState;
+  final MapCamera mapState;
   final Stream<void> stream;
   final TranslatingTileProvider tileProvider;
 
@@ -278,18 +277,21 @@ class _VectorTileLayerState extends DisposableState<_VectorTileLayer> {
   late TileWidgets _tileWidgets;
   late final _ZoomScaler _zoomScaler;
 
-  FlutterMapState get _mapState => widget.mapState;
+  MapCamera get _mapState => widget.mapState;
 
   double get _zoom => widget.options.mapZoom();
+
   double get _detailZoom =>
       widget.options.mapZoom() - widget.options.tileOffset.zoomOffset;
+
   double get _clampedZoom => max(1.0, _zoom.floorToDouble());
+
   double get _rotation => widget.options.rotation();
 
   @override
   void initState() {
     super.initState();
-    _zoomScaler = _ZoomScaler(_mapState.options.crs);
+    _zoomScaler = _ZoomScaler(_mapState.crs);
     _createTileWidgets();
     _subscription = widget.stream.listen((event) {
       _update();
@@ -394,10 +396,9 @@ class _VectorTileLayerState extends DisposableState<_VectorTileLayer> {
   TileViewport _pixelBoundsToTileViewport(Bounds pixelBounds) {
     final zoom = _clampedZoom.toInt();
     final a = pixelBounds.min.unscaleBy(tileSize).floor();
-    final b =
-        pixelBounds.max.unscaleBy(tileSize).ceil() - const CustomPoint(1, 1);
-    final topLeft = CustomPoint<int>(a.x.toInt(), a.y.toInt());
-    final bottomRight = CustomPoint<int>(b.x.toInt(), b.y.toInt());
+    final b = pixelBounds.max.unscaleBy(tileSize).ceil() - const Point(1, 1);
+    final topLeft = Point<int>(a.x.toInt(), a.y.toInt());
+    final bottomRight = Point<int>(b.x.toInt(), b.y.toInt());
     return TileViewport(zoom, Bounds<int>(topLeft, bottomRight));
   }
 
@@ -455,9 +456,9 @@ class _ZoomScaler {
 class _MapState {
   final double zoom;
   final double rotation;
-  final CustomPoint pixelOrigin;
+  final Point pixelOrigin;
   final LatLng center;
-  final CustomPoint<double> size;
+  final Point<double> size;
   final LatLngBounds bounds;
   final Bounds pixelBounds;
 
@@ -480,7 +481,7 @@ class _MapState {
   int get hashCode => Object.hash(zoom, center, size);
 }
 
-extension _MapStateExtension on FlutterMapState {
-  _MapState toMapState() =>
-      _MapState(zoom, rotation, pixelOrigin, center, size, bounds, pixelBounds);
+extension _MapStateExtension on MapCamera {
+  _MapState toMapState() => _MapState(
+      zoom, rotation, pixelOrigin, center, size, visibleBounds, pixelBounds);
 }
