@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:executor_lib/executor_lib.dart';
 import 'package:vector_tile_renderer/vector_tile_renderer.dart';
 
 import '../cache/caches.dart';
@@ -52,16 +53,20 @@ class CachesTileProvider extends TileProvider {
 
   Future<Map<String, TileData?>> _retrieve(TileRequest request,
       {required bool localOnly}) async {
-    Map<String, Future<TileData?>> futureBySource = {};
+    final Map<String, Future<TileData?>> futureBySource = {};
     for (final source in _caches.providerSources) {
       futureBySource[source] = _caches.vectorTileCache.retrieve(
           source, request.tileId,
           cachedOnly: localOnly, cancelled: request.cancelled);
     }
-    Map<String, TileData?> tileBySource = {};
+    final Map<String, TileData?> tileBySource = {};
     for (final entry in futureBySource.entries) {
       request.testCancelled();
-      tileBySource[entry.key] = await entry.value;
+      try {
+        tileBySource[entry.key] = await entry.value;
+      } on CancellationException catch (e) {
+        print(e);
+      }
     }
     return tileBySource;
   }
