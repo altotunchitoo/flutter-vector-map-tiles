@@ -128,16 +128,21 @@ class _VectorTileCompositeLayerState extends State<VectorTileCompositeLayer>
     final layers = <Widget>[];
     if (options.layerMode == VectorTileLayerMode.raster) {
       final maxZoom = options.maximumZoom ?? 18;
-
-      final tileProvider = _tileProvider ??
-          createRasterTileProvider(
-              theme,
-              widget.options.sprites,
-              _caches,
-              _executor,
-              options.tileOffset,
-              options.tileDelay,
-              options.concurrency);
+      TileProvider tileProvider;
+      try {
+        tileProvider = _tileProvider ??
+            createRasterTileProvider(
+                theme,
+                widget.options.sprites,
+                _caches,
+                _executor,
+                options.tileOffset,
+                options.tileDelay,
+                options.concurrency);
+      } on Exception catch (e) {
+        print(e);
+        return const SizedBox();
+      }
       _tileProvider = tileProvider;
       layers.add(
         TileLayer(
