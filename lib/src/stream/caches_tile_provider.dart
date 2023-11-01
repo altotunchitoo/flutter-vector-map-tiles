@@ -61,8 +61,8 @@ class CachesTileProvider extends TileProvider {
     }
     final Map<String, TileData?> tileBySource = {};
     for (final entry in futureBySource.entries) {
-      request.testCancelled();
       try {
+        request.testCancelled();
         tileBySource[entry.key] = await entry.value;
       } on CancellationException catch (e) {
         print(e);
